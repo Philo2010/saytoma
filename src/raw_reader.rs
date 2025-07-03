@@ -4,20 +4,15 @@ use std::io::{BufReader, BufWriter, copy};
 use std::path::PathBuf;
 use tempfile::TempDir;
 use zip::ZipArchive;
-struct PageReader {
+pub struct PageReader {
     //TODO: Fill Data
-    dir: TempDir,
-    paths: Vec<PathBuf>
+    pub dir: TempDir,
+    pub paths: Vec<PathBuf>
 }
 
 impl PageReader {
-    fn sort(pagelist: Vec<PathBuf>) -> Vec<PathBuf> {
-        let sorted = Vec::new();
-        
-        sorted
-    }
 
-    pub fn new(file: &File) -> Result<PageReader, std::io::Error> {
+    pub fn new(file: File) -> Result<PageReader, std::io::Error> {
         let reader = BufReader::new(file); 
         let mut archive = ZipArchive::new(reader)?;
 
@@ -30,18 +25,15 @@ impl PageReader {
             let out_path = temp_dir.path().join(file_in_zip.name());
 
             if file_in_zip.name().ends_with('/') {
-                std::fs::create_dir_all(&out_path);
+                std::fs::create_dir_all(&out_path)?;
             } else {
-                if let Some(parent) = out_path.parent() {
-                    std::fs::create_dir_all(&out_path);
-                }
                 let out_file = File::create(&out_path)?;
                 let mut writer = BufWriter::new(out_file);
                 copy(&mut file_in_zip, &mut writer)?;
                 extracted_paths.push(out_path);
             }
         }
-
+        extracted_paths.sort_by(|a, b| natord::compare(&a.to_string_lossy(), &b.to_string_lossy()));
         Ok(PageReader { dir: temp_dir, paths: extracted_paths })
     }
 }

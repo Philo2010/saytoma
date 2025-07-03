@@ -11,6 +11,12 @@ struct PageReader {
 }
 
 impl PageReader {
+    fn sort(pagelist: Vec<PathBuf>) -> Vec<PathBuf> {
+        let sorted = Vec::new();
+        
+        sorted
+    }
+
     pub fn new(file: &File) -> Result<PageReader, std::io::Error> {
         let reader = BufReader::new(file); 
         let mut archive = ZipArchive::new(reader)?;

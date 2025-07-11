@@ -1,6 +1,6 @@
 use std::{fs::File, path::{Path, PathBuf}};
 use iced::{
-    Application, Command, Element, Settings, executor,
+    Application, Element, Settings, executor,
     widget::{Image, button, column, text, Column},
     keyboard, Subscription,
 };
@@ -14,11 +14,11 @@ pub fn main() -> iced::Result {
 enum Message {
     Increment,
     Decrement,
-    KeyPressed(keyboard::Event)
+    Open(String)
 }
 
 struct Saytoma {
-    page: u32,
+    page: usize,
     reader: Option<raw_reader::PageReader>
 }
 
@@ -54,24 +54,22 @@ impl Saytoma {
         match message {
             Message::Increment => self.page += 1,
             Message::Decrement => self.page -= 1,
-            Message::KeyPressed(x) => {
-                todo!()
-            }
+            Message::Open(a) => self.open_new_file(&a),
         }
-    }
-    fn subscription(&self) -> Subscription<Message> {
-        keyboard::Events::default().map(Message::KeyPressed)
     }
 
     fn view(&self) -> Column<Message> {
         if self.reader.is_none() {
-            return column!(text("No file loaded"));
+            return column![text("No file loaded"),
+            button("Open").on_press(Message::Open("/Users/philipbedrosian/code/saytoma/One-Punch Man Chapters 101-105.cbz".to_string()))
+            ];
         }
         let unwrap_reader = self.reader.as_ref().unwrap();
 
         column![
-            Image::new(unwrap_reader.paths[0].clone()),
             button("+").on_press(Message::Increment),
+            button("-").on_press(Message::Decrement),
+            Image::new(unwrap_reader.read_at(self.page)),
         ]
     }
 }

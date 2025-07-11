@@ -39,11 +39,7 @@ impl PageReader {
         let handled_paths: Vec<iced::advanced::image::Handle> = extracted_paths.iter().map(|path| iced::advanced::image::Handle::from_path(path)).collect();
         Ok(PageReader { dir: temp_dir, paths:handled_paths})
     }
-    pub fn read_at(&self, index: usize) -> Option<&iced::advanced::image::Handle> {
-        if index > self.paths.len()-1 {
-            return None;
-        }
-
-        Some(&self.paths[index])
+    pub fn read_at(&self, index: usize) -> iced::advanced::image::Handle {
+        self.paths[index].clone()
     }
 }

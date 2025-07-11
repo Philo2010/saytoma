@@ -9,7 +9,7 @@ use zip::ZipArchive;
 pub struct PageReader {
     //TODO: Fill Data
     pub dir: TempDir,
-    pub paths: Vec<iced::advanced::image::Handle>
+    pub paths: Vec<PathBuf>
 }
 
 impl PageReader {
@@ -36,10 +36,9 @@ impl PageReader {
             }
         }
         extracted_paths.sort_by(|a, b| natord::compare(&a.to_string_lossy(), &b.to_string_lossy()));
-        let handled_paths: Vec<iced::advanced::image::Handle> = extracted_paths.iter().map(|path| iced::advanced::image::Handle::from_path(path)).collect();
-        Ok(PageReader { dir: temp_dir, paths:handled_paths})
+        Ok(PageReader { dir: temp_dir, paths:extracted_paths})
     }
-    pub fn read_at(&self, index: usize) -> iced::advanced::image::Handle {
-        self.paths[index].clone()
+    pub fn read_at(&self, index: usize) -> &PathBuf {
+        &self.paths[index]
     }
 }

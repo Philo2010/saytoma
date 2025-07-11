@@ -5,7 +5,10 @@ use iced::{
     keyboard, Subscription,
 };
 mod raw_reader;
-
+//TODO:
+//1. Add a progress bar while unziping,
+//2. Add Keybinds for open, right, and left
+//3. Make the ui not shit
 pub fn main() -> iced::Result {
     iced::application("A counter", Saytoma::update, Saytoma::view).run()
 }
@@ -61,7 +64,7 @@ impl Saytoma {
     fn view(&self) -> Column<Message> {
         if self.reader.is_none() {
             return column![text("No file loaded"),
-            button("Open").on_press(Message::Open("/Users/philipbedrosian/code/saytoma/One-Punch Man Chapters 101-105.cbz".to_string()))
+            button("Open").on_press(Message::Open("/Users/philipbedrosian/Downloads/Invincible, Vol. 2.cbz".to_string()))
             ];
         }
         let unwrap_reader = self.reader.as_ref().unwrap();

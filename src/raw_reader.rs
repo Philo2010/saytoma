@@ -2,12 +2,14 @@
 use std::fs::File;
 use std::io::{BufReader, BufWriter, copy};
 use std::path::PathBuf;
+use iced::advanced::svg::Handle;
 use tempfile::TempDir;
 use zip::ZipArchive;
+
 pub struct PageReader {
     //TODO: Fill Data
     pub dir: TempDir,
-    pub paths: Vec<PathBuf>
+    pub paths: Vec<iced::advanced::image::Handle>
 }
 
 impl PageReader {
@@ -34,6 +36,14 @@ impl PageReader {
             }
         }
         extracted_paths.sort_by(|a, b| natord::compare(&a.to_string_lossy(), &b.to_string_lossy()));
-        Ok(PageReader { dir: temp_dir, paths: extracted_paths })
+        let handled_paths: Vec<iced::advanced::image::Handle> = extracted_paths.iter().map(|path| iced::advanced::image::Handle::from_path(path)).collect();
+        Ok(PageReader { dir: temp_dir, paths:handled_paths})
+    }
+    pub fn read_at(&self, index: usize) -> Option<&iced::advanced::image::Handle> {
+        if index > self.paths.len()-1 {
+            return None;
+        }
+
+        Some(&self.paths[index])
     }
 }

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-iced = "0.13.1"
+iced = {version = "0.13.1", features = ["image", "advanced"]}
 zip = "0.6"
 tempfile = "3.8"
 natord = "1.0.9"

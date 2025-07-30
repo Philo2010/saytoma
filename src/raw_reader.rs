@@ -2,7 +2,6 @@
 use std::fs::File;
 use std::io::{BufReader, BufWriter, copy};
 use std::path::PathBuf;
-use iced::advanced::svg::Handle;
 use tempfile::TempDir;
 use zip::ZipArchive;
 
@@ -16,8 +15,9 @@ impl PageReader {
 
     pub fn new(file: File) -> Result<PageReader, std::io::Error> {
         let reader = BufReader::new(file); 
+        println!("Start");
         let mut archive = ZipArchive::new(reader)?;
-
+        println!("end");
         let temp_dir = tempfile::tempdir()?;
         let mut extracted_paths = Vec::new();
 
@@ -25,7 +25,6 @@ impl PageReader {
             let mut file_in_zip = archive.by_index(i)?;
 
             let out_path = temp_dir.path().join(file_in_zip.name());
-
             if file_in_zip.name().ends_with('/') {
                 std::fs::create_dir_all(&out_path)?;
             } else {

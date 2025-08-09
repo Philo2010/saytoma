@@ -1,10 +1,10 @@
-use std::{fmt::{write, Debug}, fs::File, ops::Sub, path::{Path, PathBuf}, process::Command, sync::{atomic::{AtomicUsize, Ordering}, Arc}, time::Duration};
+use std::{fs::File, sync::{atomic::{AtomicUsize, Ordering}, Arc}, time::Duration};
 use iced::{
-    futures::{channel::mpsc::Sender, future::Shared}, stream, time, widget::{button, column, progress_bar, text, Column, Scrollable}, Length, Task
+    time, widget::{button, column, progress_bar, Column, Scrollable}, Length::{self}, Task
 };
-use tokio::sync::watch;
 mod raw_reader;
 use iced::Subscription;
+use rfd::FileDialog;
 
 //TODO:
 //1. Add a progress bar while unziping,
@@ -21,7 +21,7 @@ enum Message {
     Decrement,
     ZoomIn,
     ZoomOut,
-    Open(String),
+    Open,
     Tick,
     DoneLoading(Result<raw_reader::PageReader, std::io::Error>),
 }
@@ -54,7 +54,7 @@ impl Clone for Message {
             Message::ZoomIn => Message::ZoomIn,
             Message::ZoomOut => Message::ZoomOut,
             Message::Tick => Message::Tick,
-            Message::Open(s) => Message::Open(s.clone()),
+            Message::Open => Message::Open,
             Message::DoneLoading(_) => {
                 panic!("Cannot clone Message::DoneLoading");
             }
@@ -70,7 +70,7 @@ impl std::fmt::Debug for Message {
             Message::ZoomIn => write!(f, "ZoomIn"),
             Message::ZoomOut => write!(f, "ZoomOut"),
             Message::Tick => write!(f, "Tick"),
-            Message::Open(s) => f.debug_tuple("Open").field(s).finish(),
+            Message::Open=> write!(f, "Open"),
             Message::DoneLoading(_) => write!(f, "DoneLoading(<opaque>)"),
         }
     }
@@ -79,18 +79,10 @@ impl std::fmt::Debug for Message {
 
 
 impl Saytoma {
-    fn open_new_file(&mut self,name: &String) -> Task<Message> {
+    fn open_new_file(&mut self, file: File) -> Task<Message> {
         if self.loading_stream.is_some() {
             return Task::none();
         }
-        let path = Path::new(name);
-
-        let file = match File::open(path) {
-            Ok(a) => a,
-            Err(_) => return Task::none(), //File not found
-        };
-
-        //File so exist from this point
 
         let tx = Arc::new(AtomicUsize::new(0));
         self.loading_stream = Some(tx.clone());
@@ -102,7 +94,17 @@ impl Saytoma {
         match message {
             Message::Increment => {self.page += 1; Task::none()}, //TODO: Clamp this
             Message::Decrement => {self.page -= 1; Task::none()},
-            Message::Open(a) => self.open_new_file(&a),
+            Message::Open => {
+                let filebuf = match FileDialog::new().pick_file() {
+                    None => {return Task::none();},
+                    Some(a) => a,
+                };
+                let file = match File::open(filebuf) {
+                    Err(_) => {return Task::none();},
+                    Ok(a) => a
+                };
+                self.open_new_file(file)
+            },
             Message::ZoomIn => {self.zoom *= 1.1; Task::none()},
             Message::ZoomOut => {self.zoom /= 1.1; Task::none()},
             Message::Tick => {
@@ -140,7 +142,7 @@ impl Saytoma {
         if self.reader.is_none() {
             let collom = column![
             progress_bar(0.0..=100.0, self.counter as f32),
-            button("Open").on_press(Message::Open("/Users/philipbedrosian/Downloads/Invincible, Vol. 2.cbz".to_string()))
+            button("Open").on_press(Message::Open)
             ];
             return Scrollable::new(
             Column::new().push(collom));

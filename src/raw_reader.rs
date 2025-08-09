@@ -30,7 +30,6 @@ pub struct PageReader {
 impl PageReader {
 
     pub async fn new(file: File, tx: Arc<AtomicUsize>) -> Result<PageReader, std::io::Error> {
-        println!("Ran!");
         let reader = BufReader::new(file); 
         let mut archive = ZipArchive::new(reader)?;
         let temp_dir = tempfile::tempdir()?;

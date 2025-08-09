@@ -10,3 +10,4 @@ tempfile = "3.8"
 natord = "1.0.9"
 tokio = { version = "1.47.1", features = ["sync"] }
 iced_native = "0.10.3"
+rfd = "0.15.4"

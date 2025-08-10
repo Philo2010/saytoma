@@ -1,6 +1,6 @@
-use std::{fs::File, sync::{atomic::{AtomicUsize, Ordering}, Arc}, time::Duration};
+use std::{fs::File, ops::Sub, sync::{atomic::{AtomicUsize, Ordering}, Arc}, time::Duration};
 use iced::{
-    time, widget::{button, column, progress_bar, Column, Scrollable}, Length::{self}, Task
+    advanced::subscription, alignment::Horizontal, keyboard::{self, Key, Modifiers}, time, widget::{button, center, column, container, progress_bar, text, Column, Container, Scrollable}, Alignment, Length::{self}, Task
 };
 mod raw_reader;
 use iced::Subscription;
@@ -24,6 +24,7 @@ enum Message {
     Open,
     Tick,
     DoneLoading(Result<raw_reader::PageReader, std::io::Error>),
+    NoInput
 }
 
 struct Saytoma {
@@ -49,6 +50,7 @@ impl Default for Saytoma {
 impl Clone for Message {
     fn clone(&self) -> Self {
         match self {
+            Message::NoInput => Message::NoInput,
             Message::Increment => Message::Increment,
             Message::Decrement => Message::Decrement,
             Message::ZoomIn => Message::ZoomIn,
@@ -65,6 +67,7 @@ impl Clone for Message {
 impl std::fmt::Debug for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Message::NoInput => write!(f, "NoInput"),
             Message::Increment => write!(f, "Increment"),
             Message::Decrement => write!(f, "Decrement"),
             Message::ZoomIn => write!(f, "ZoomIn"),
@@ -78,7 +81,7 @@ impl std::fmt::Debug for Message {
 
 
 
-impl Saytoma {
+impl Saytoma { //TODO: fix opening a file while loading
     fn open_new_file(&mut self, file: File) -> Task<Message> {
         if self.loading_stream.is_some() {
             return Task::none();
@@ -86,12 +89,14 @@ impl Saytoma {
 
         let tx = Arc::new(AtomicUsize::new(0));
         self.loading_stream = Some(tx.clone());
+        self.reader = None;
 
         Task::perform(raw_reader::PageReader::new(file, tx), Message::DoneLoading)
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::NoInput => {Task::none()},
             Message::Increment => {self.page += 1; Task::none()}, //TODO: Clamp this
             Message::Decrement => {self.page -= 1; Task::none()},
             Message::Open => {
@@ -131,40 +136,82 @@ impl Saytoma {
         }
     }
 
-    fn subscription(&self) -> Subscription<Message> {
-        if self.loading_stream.is_none() {
-            return Subscription::none();
-        }
-        time::every(Duration::from_millis(100)).map(|_| Message::Tick)
+    fn keyboard_sub(&self) -> Subscription<Message> {
+        iced::event::listen().map(|event| match event {
+            iced::Event::Keyboard(a) => {
+                match a {
+                    keyboard::Event::KeyReleased {key, ..} => {
+                        match key {
+                            keyboard::Key::Named(keyboard::key::Named::ArrowRight) => {
+                                return Message::Increment;
+                            }
+                            keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => {
+                                return Message::Decrement;
+                            }
+                            keyboard::Key::Character(c) => {
+                                if c == "+" || c == "=" {
+                                    return Message::ZoomIn;
+                                } else if c == "-" || c == "_" {
+                                    return Message::ZoomOut;
+                                } else if c == "o" || c == "O" {
+                                    return Message::Open;
+                                } else {
+                                    return Message::NoInput;
+                                }
+                            }
+                            _ => {return Message::NoInput;}
+                        }
+                    },
+                    _ => {return Message::NoInput;}
+                }
+            }
+            _ => {return Message::NoInput}
+        })
     }
 
-    fn view(&self) -> Scrollable<Message> {
+    fn subscription(&self) -> Subscription<Message> {
+        let mut subs = Vec::new();
+
+        subs.push(self.keyboard_sub());
+
+        if self.loading_stream.is_some() {
+            subs.push(time::every(Duration::from_millis(100)).map(|_| Message::Tick));
+        }
+        Subscription::batch(subs)
+    }
+
+    fn view(&self) -> Container<Message> {
         if self.reader.is_none() {
+            if self.loading_stream.is_some() {
+                let collom = column![
+                    progress_bar(0.0..=100.0, self.counter as f32),
+                ];
+                return center(collom);
+            }
             let collom = column![
-            progress_bar(0.0..=100.0, self.counter as f32),
-            button("Open").on_press(Message::Open)
-            ];
-            return Scrollable::new(
-            Column::new().push(collom));
+                text("Saytoma").size(48),
+                text("a simple comic book reader"),
+                text("Up | scroll up"),
+                text("Down | scroll down"),
+                text("Left | Last page"),
+                text("Right | Next page"),
+                text("+ | Zoom in"),
+                text("- | Zoom out"),
+                button("Open").on_press(Message::Open)
+            ].align_x(Alignment::Center);
+            return center(collom);
         }
         let unwrap_reader = self.reader.as_ref().unwrap();
 
         let handle = iced::advanced::image::Handle::from_path(unwrap_reader.read_at(self.page));
         let (base_width, base_height) = (800.0, 1000.0); 
-
         let collom = column![
-            button("+").on_press(Message::Increment),
-            button("-").on_press(Message::Decrement),
-            button("zoom in").on_press(Message::ZoomIn),
-            button("zoom out").on_press(Message::ZoomOut),
             iced::widget::image::Image::new(handle)
                 .width(Length::from((base_width * self.zoom) as u16))
                 .height(Length::from((base_height * self.zoom) as u16))
-            //iced::widget::image::Viewer::new(handle).scale_step(self.zoom).height(1000),
-            //canvas(ImageView {radius: 50.0})
         ];
-        Scrollable::new(
-            Column::new().push(collom))
+
+        center(Scrollable::new(collom))
     }
 }
 

@@ -190,7 +190,7 @@ impl Saytoma { //TODO: fix opening a file while loading
             }
             let collom = column![
                 text("Saytoma").size(48),
-                text("a simple comic book reader"),
+                text("a simple comic book reader | MIT LICENSE Philip Bedrosian 2025"),
                 text("Up | scroll up"),
                 text("Down | scroll down"),
                 text("Left | Last page"),

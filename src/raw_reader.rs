@@ -22,7 +22,6 @@ pub enum PageReaderState  {
 
 
 pub struct PageReader {
-    //TODO: Fill Data
     pub dir: TempDir,
     pub paths: Vec<PathBuf>,
 }

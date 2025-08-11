@@ -1,19 +1,21 @@
 use std::{fs::File, ops::Sub, sync::{atomic::{AtomicUsize, Ordering}, Arc}, time::Duration};
 use iced::{
-    advanced::subscription, alignment::Horizontal, keyboard::{self, Key, Modifiers}, time, widget::{button, center, column, container, progress_bar, text, Column, Container, Scrollable}, Alignment, Length::{self}, Task
+    advanced::subscription, alignment::Horizontal, keyboard::{self, Key, Modifiers}, time, widget::{button, center, column, container, progress_bar, scrollable::{self, AbsoluteOffset, RelativeOffset}, text, Column, Container, Scrollable}, Alignment, Length::{self}, Task
 };
 mod raw_reader;
 use iced::Subscription;
 use rfd::FileDialog;
+use iced::advanced::widget::operation;
 
-//TODO:
-//1. Add a progress bar while unziping,
-//2. Add Keybinds for open, right, and left
-//3. Make the ui not shit
 pub fn main() -> iced::Result {
     iced::application("A counter", Saytoma::update, Saytoma::view)
     .subscription(|state | state.subscription())
     .run()
+}
+
+enum ScrollDir {
+    Up,
+    Down
 }
 
 enum Message {
@@ -23,6 +25,9 @@ enum Message {
     ZoomOut,
     Open,
     Tick,
+    ScrollUp,
+    ScrollDown,
+    ScrollStop,
     DoneLoading(Result<raw_reader::PageReader, std::io::Error>),
     NoInput
 }
@@ -33,6 +38,9 @@ struct Saytoma {
     zoom: f32,
     counter: usize,
     loading_stream: Option<Arc<AtomicUsize>>,
+    scroll: scrollable::Id,
+    scroll_y: f32,
+    scroll_dir: Option<ScrollDir>,
 }
 
 impl Default for Saytoma {
@@ -43,6 +51,9 @@ impl Default for Saytoma {
             zoom: 1.0,
             counter: 0,
             loading_stream: None,
+            scroll: scrollable::Id::unique(),
+            scroll_y: 0.0,
+            scroll_dir: None
         }
     }
 }
@@ -57,6 +68,9 @@ impl Clone for Message {
             Message::ZoomOut => Message::ZoomOut,
             Message::Tick => Message::Tick,
             Message::Open => Message::Open,
+            Message::ScrollUp => Message::ScrollUp,
+            Message::ScrollStop => Message::ScrollStop,
+            Message::ScrollDown => Message::ScrollDown,
             Message::DoneLoading(_) => {
                 panic!("Cannot clone Message::DoneLoading");
             }
@@ -74,6 +88,9 @@ impl std::fmt::Debug for Message {
             Message::ZoomOut => write!(f, "ZoomOut"),
             Message::Tick => write!(f, "Tick"),
             Message::Open=> write!(f, "Open"),
+            Message::ScrollStop => write!(f, "ScrollStop"),
+            Message::ScrollDown => write!(f, "ScrollDown"),
+            Message::ScrollUp => write!(f, "ScrollDown"),
             Message::DoneLoading(_) => write!(f, "DoneLoading(<opaque>)"),
         }
     }
@@ -81,7 +98,7 @@ impl std::fmt::Debug for Message {
 
 
 
-impl Saytoma { //TODO: fix opening a file while loading
+impl Saytoma {
     fn open_new_file(&mut self, file: File) -> Task<Message> {
         if self.loading_stream.is_some() {
             return Task::none();
@@ -96,9 +113,31 @@ impl Saytoma { //TODO: fix opening a file while loading
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::ScrollDown => {
+                self.scroll_dir = Some(ScrollDir::Down);
+                Task::none()
+            },
+            Message::ScrollUp => {
+                self.scroll_dir = Some(ScrollDir::Up);
+                Task::none()
+            },
+            Message::ScrollStop => {
+                self.scroll_dir = None;
+                Task::none()
+            }
             Message::NoInput => {Task::none()},
-            Message::Increment => {self.page += 1; Task::none()}, //TODO: Clamp this
-            Message::Decrement => {self.page -= 1; Task::none()},
+            Message::Increment => {
+                if let Some(reader) = &self.reader {
+                    self.page = (self.page + 1).min(reader.paths.len().saturating_sub(1));
+                }
+                Task::none()
+            },
+            Message::Decrement => {
+                if self.reader.is_some() {
+                    self.page = self.page.saturating_sub(1);
+                }
+                Task::none()
+            },
             Message::Open => {
                 let filebuf = match FileDialog::new().pick_file() {
                     None => {return Task::none();},
@@ -117,6 +156,25 @@ impl Saytoma { //TODO: fix opening a file while loading
                     None => 0,
                     Some(a) => a.load(Ordering::SeqCst),
                 };
+
+                if let Some(value) = &self.scroll_dir {
+                    match value {
+                        ScrollDir::Up => {
+                            self.scroll_y = (self.scroll_y - 0.10).max(0.0);
+                            return scrollable::snap_to(
+                                self.scroll.clone(),
+                                RelativeOffset { x: 0.0, y: self.scroll_y },
+                            );
+                        },
+                        ScrollDir::Down => {
+                            self.scroll_y = (self.scroll_y + 0.10).min(1.0);
+                            return scrollable::snap_to(
+                                self.scroll.clone(),
+                                RelativeOffset { x: 0.0, y: self.scroll_y }, 
+                            );
+                        },
+                    }
+                }
                 Task::none()
             }
             Message::DoneLoading(a) => {
@@ -159,9 +217,26 @@ impl Saytoma { //TODO: fix opening a file while loading
                                     return Message::NoInput;
                                 }
                             }
+                            keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
+                                return Message::ScrollStop;
+                            }
+                            keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
+                                return Message::ScrollStop;
+                            }
                             _ => {return Message::NoInput;}
                         }
                     },
+                    keyboard::Event::KeyPressed {key, ..} => {
+                        match key {
+                            keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
+                                return Message::ScrollDown;
+                            }
+                            keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
+                                return Message::ScrollUp;
+                            }
+                            _ => {return Message::NoInput;}
+                        }
+                    }
                     _ => {return Message::NoInput;}
                 }
             }
@@ -174,9 +249,7 @@ impl Saytoma { //TODO: fix opening a file while loading
 
         subs.push(self.keyboard_sub());
 
-        if self.loading_stream.is_some() {
-            subs.push(time::every(Duration::from_millis(100)).map(|_| Message::Tick));
-        }
+        subs.push(time::every(Duration::from_millis(100)).map(|_| Message::Tick));
         Subscription::batch(subs)
     }
 
@@ -208,10 +281,10 @@ impl Saytoma { //TODO: fix opening a file while loading
         let collom = column![
             iced::widget::image::Image::new(handle)
                 .width(Length::from((base_width * self.zoom) as u16))
-                .height(Length::from((base_height * self.zoom) as u16))
+                .height(Length::from((base_height * self.zoom) as u16)),
         ];
 
-        center(Scrollable::new(collom))
+        center(Scrollable::new(collom).id(self.scroll.clone()))
     }
 }
 
